@@ -29,7 +29,7 @@ packages:
   - name: compass-cobbler
     description: "cobbler container for compass"
     get_method: docker
-    url: compass4nfv/compass-cobbler:latest
+    url: yifei0van0xue/compass-cobbler:latest
 
   - name: compass-db
     description: "datebase container for compass"
