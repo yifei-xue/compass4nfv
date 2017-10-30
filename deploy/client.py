@@ -250,12 +250,21 @@ opts = [
     cfg.StrOpt('odl_l3_agent',
                help='odl l3 agent enable flag',
                default='Disable'),
-    cfg.StrOpt('moon',
-               help='moon enable flag',
-               default='Disable'),
+    cfg.StrOpt('moon_cfg',
+               help='moon config',
+               default='master:flag=Disable,slave:flag=Disable,slave:name=slave1,slave:master_ip=master_ip'),  # noqa
     cfg.StrOpt('onos_sfc',
                help='onos_sfc enable flag',
                default='Disable'),
+    cfg.StrOpt('plugins',
+               help='plugin dict',
+               default='{}'),
+    cfg.StrOpt('offline_deployment',
+               help='offline_deployment',
+               default='Disable'),
+    cfg.StrOpt('offline_repo_port',
+               help='offline_repo_port',
+               default='5151'),
 ]
 CONF.register_cli_opts(opts)
 
@@ -725,6 +734,36 @@ class CompassClient(object):
                 'password': password
             }
 
+        ip_pattern = re.compile('\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
+        compass_ip = re.findall(ip_pattern, CONF.compass_server)[0]
+        package_config["compass_ip"] = compass_ip
+        package_config["offline_repo_port"] = CONF.offline_repo_port
+        package_config["offline_deployment"] = CONF.offline_deployment
+
+        moon_cfgs = [
+            cfg
+            for cfg in CONF.moon_cfg.split(',')
+            if cfg
+        ]
+        LOG.info(
+            'moon configure: %s', moon_cfgs
+        )
+        moon_cfg = {}
+        for cfg in moon_cfgs:
+            if ':' not in cfg:
+                raise Exception(
+                    'there is no : in cfg %s' % cfg  # noqa
+                )
+            role, conf_pair = cfg.split(':', 1)
+            if '=' not in conf_pair:
+                raise Exception(
+                    'there is no = in %s configure pair' % conf_pair
+                )
+            key, value = conf_pair.split('=', 1)
+            moon_cfg[role] = {} if role not in moon_cfg else moon_cfg[role]
+            moon_cfg[role][key] = value
+        package_config["moon_cfg"] = moon_cfg
+
         package_config["security"] = {"service_credentials": service_credential_cfg,  # noqa
                                       "console_credentials": console_credential_cfg}  # noqa
 
@@ -737,11 +776,11 @@ class CompassClient(object):
         package_config['network_mapping'] = network_mapping
 
         assert(os.path.exists(CONF.network_cfg))
-        network_cfg = yaml.load(open(CONF.network_cfg))
+        network_cfg = yaml.safe_load(open(CONF.network_cfg))
         package_config["network_cfg"] = network_cfg
 
         assert(os.path.exists(CONF.neutron_cfg))
-        neutron_cfg = yaml.load(open(CONF.neutron_cfg))
+        neutron_cfg = yaml.safe_load(open(CONF.neutron_cfg))
         package_config["neutron_config"] = neutron_cfg
 
         """
@@ -758,12 +797,13 @@ class CompassClient(object):
         package_config['enable_secgroup'] = (CONF.enable_secgroup == "true")
         package_config['enable_fwaas'] = (CONF.enable_fwaas == "true")
         package_config['enable_vpnaas'] = (CONF.enable_vpnaas == "true")
-        package_config[
-            'odl_l3_agent'] = "Enable" if CONF.odl_l3_agent == "Enable" else "Disable"   # noqa
-        package_config[
-            'moon'] = "Enable" if CONF.moon == "Enable" else "Disable"
-        package_config[
-            'onos_sfc'] = "Enable" if CONF.onos_sfc == "Enable" else "Disable"
+        package_config['odl_l3_agent'] = "Enable" if CONF.odl_l3_agent == "Enable" else "Disable"   # noqa
+        package_config['onos_sfc'] = "Enable" if CONF.onos_sfc == "Enable" else "Disable"   # noqa
+        package_config['plugins'] = []
+        if CONF.plugins:
+            for item in CONF.plugins.split(','):
+                key, value = item.split(':')
+                package_config['plugins'].append({key: value})
 
         status, resp = self.client.update_cluster_config(
             cluster_id, package_config=package_config)
@@ -913,7 +953,7 @@ class CompassClient(object):
                 status, response = self.client.get_host_state(id)
                 if response['state'] != 'SUCCESSFUL':
                     ready = False
-                break
+                    break
 
             current_time = time.time()
             if not ready:
@@ -944,6 +984,9 @@ class CompassClient(object):
             deployment_timeout = time.time() + 60 * float(CONF.deployment_timeout)  # noqa
             current_time = time.time
             while current_time() < deployment_timeout:
+                if not ansible_print.is_alive():
+                    raise RuntimeError("can not get ansible log")
+
                 status, cluster_state = self.get_cluster_state(cluster_id)
                 if not self.is_ok(status):
                     raise RuntimeError("can not get cluster state")
@@ -967,7 +1010,7 @@ class CompassClient(object):
                          % (current_time(), deployment_timeout))
                 LOG.info("cobbler status:")
                 os.system("sudo docker exec compass-cobbler bash -c \
-                          'cobbler status'" % (CONF.rsa_file))
+                          'cobbler status'")
                 raise RuntimeError("installation timeout")
 
         try:

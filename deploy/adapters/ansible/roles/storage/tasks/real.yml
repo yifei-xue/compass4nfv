@@ -12,5 +12,5 @@
   ignore_errors: "True"
 
 - name: create physical and group volumes
-  lvg: vg=storage-volumes pvs={{ physical_device }}
+  lvg: vg=cinder-volumes pvs={{ physical_device }}
        vg_options=--force

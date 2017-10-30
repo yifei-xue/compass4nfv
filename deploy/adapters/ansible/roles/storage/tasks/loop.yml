@@ -27,5 +27,5 @@
   register: loop_device_filterd
 
 - name: create physical and group volumes
-  lvg: vg=storage-volumes pvs={{ loop_device_filterd.stdout }}
+  lvg: vg=cinder-volumes pvs={{ loop_device_filterd.stdout }}
        vg_options=--force

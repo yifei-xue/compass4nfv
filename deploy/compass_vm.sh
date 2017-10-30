@@ -93,6 +93,8 @@ function inject_compass_conf() {
 function refresh_compass_core () {
     sudo docker exec compass-deck bash -c "/opt/compass/bin/manage_db.py createdb"
     sudo docker exec compass-deck bash -c "/root/compass-deck/bin/clean_installers.py"
+    sudo docker exec compass-tasks bash -c \
+    "ps aux | grep -E '[a]nsible-playbook|[o]penstack-ansible' | awk '{print \$2}' | xargs kill -9"
     sudo rm -rf $WORK_DIR/docker/ansible/run/*
 }
 
@@ -129,7 +131,25 @@ function wait_ok() {
 function launch_compass() {
     local group_vars=$WORK_DIR/installer/compass-docker-compose/group_vars/all
     sed -i "s#^\(compass_dir:\).*#\1 $COMPASS_DIR#g" $group_vars
+    sed -i "s#^\(compass_deck:\).*#\1 $COMPASS_DECK#g" $group_vars
+    sed -i "s#^\(compass_tasks:\).*#\1 $COMPASS_TASKS#g" $group_vars
+    sed -i "s#^\(compass_cobbler:\).*#\1 $COMPASS_COBBLER#g" $group_vars
+    sed -i "s#^\(compass_db:\).*#\1 $COMPASS_DB#g" $group_vars
+    sed -i "s#^\(compass_mq:\).*#\1 $COMPASS_MQ#g" $group_vars
 
+    if [[ $OFFLINE_DEPLOY == "Enable" ]]; then
+        sed -i "s#.*\(compass_repo:\).*#\1 $COMPASS_REPO#g" $group_vars
+    else
+        sed -i "s/^\(compass_repo:.*\)/#\1/g" $group_vars
+    fi
+    sed -i "s#^\(host_ip:\).*#\1 $INSTALL_IP#g" $group_vars
+    sed -i "s#^\(install_subnet:\).*#\1 ${INSTALL_CIDR%/*}#g" $group_vars
+    sed -i "s#^\(install_prefix:\).*#\1 ${INSTALL_CIDR##*/}#g" $group_vars
+    sed -i "s#^\(install_netmask:\).*#\1 $INSTALL_NETMASK#g" $group_vars
+    sed -i "s#^\(install_ip_range:\).*#\1 $INSTALL_IP_RANGE#g" $group_vars
+
+    sed -i "s#^\(deck_port:\).*#\1 $COMPASS_DECK_PORT#g" $group_vars
+    sed -i "s#^\(repo_port:\).*#\1 $COMPASS_REPO_PORT#g" $group_vars
     ansible-playbook $WORK_DIR/installer/compass-docker-compose/bring_up_compass.yml
 }
 

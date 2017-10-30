@@ -1,0 +1,14 @@
+---
+
+- name: install crudini
+  package:
+    name: crudini
+    state: latest
+
+- name: install networking-odl
+  pip:
+    name: networking-odl
+    virtualenv: /openstack/venvs/neutron-15.1.4    # Todo: hardcode, need to modify
+
+- name: turn off neutron-server on control node
+  service: name=neutron-server state=stopped

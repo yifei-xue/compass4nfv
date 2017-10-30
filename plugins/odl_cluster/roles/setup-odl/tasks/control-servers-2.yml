@@ -1,0 +1,29 @@
+---
+
+- name: configure odl l3 driver
+  shell: |
+    crudini --set /etc/neutron/neutron.conf DEFAULT service_plugins \
+        odl-router,metering;
+  when: odl_l3_agent == "Enable"
+
+- name: configure opendaylight -> ml2
+  shell: >
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 mechanism_drivers opendaylight_v2;
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 tenant_network_types vxlan;
+    crudini --del /etc/neutron/plugins/ml2/ml2_conf.ini ovs;
+    crudini --del /etc/neutron/plugins/ml2/ml2_conf.ini securitygroup firewall_driver;
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2 extension_drivers port_security;
+
+- name: turn off l3 ha for odl l2
+  shell: |
+    crudini --set /etc/neutron/neutron.conf DEFAULT l3_ha "False";
+  when: odl_l3_agent == "Disable"
+
+- name: configure opendaylight in ml2
+  shell: |
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2_odl username admin;
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2_odl password admin;
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2_odl url \
+        http://{{ internal_lb_vip_address }}:8080/controller/nb/v2/neutron;
+    crudini --set /etc/neutron/plugins/ml2/ml2_conf.ini ml2_odl port_binding_controller \
+        pseudo-agentdb-binding;

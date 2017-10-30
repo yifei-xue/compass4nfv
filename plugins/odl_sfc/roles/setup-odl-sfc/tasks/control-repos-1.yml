@@ -1,0 +1,9 @@
+---
+- name: copy download script
+  copy:
+    src: odl_pkg.sh
+    dest: /opt/odl_pkg.sh
+    mode: 0777
+
+- name: download networking sfc and odl
+  command: su -s /bin/sh -c "/opt/odl_pkg.sh"
